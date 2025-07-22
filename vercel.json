@@ -1,23 +1,18 @@
 {
-  "version": 3,
+  "version": 2,
   "builds": [
     {
       "src": "frontend/package.json",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["frontend/**"]
-      }
+      "use": "@vercel/static-build"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "frontend/dist/$1"
+      "dest": "/frontend/dist/$1"
     }
   ],
-  "build": {
-    "env": {
-      "NODE_VERSION": "18"
-    }
+  "env": {
+    "NODE_VERSION": "18"
   }
 }
