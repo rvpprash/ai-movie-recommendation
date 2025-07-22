@@ -12,7 +12,6 @@
     "dev": "concurrently \"npm run fe\" \"npm run be\""
   },
   "devDependencies": {
-    "concurrently": "^9.2.0",
-    "vite-plugin-fonts": "^0.7.0"
+    "concurrently": "^9.2.0"
   }
 }
