@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 export default function Chatbot() {
   const [input, setInput] = useState("");
@@ -42,7 +42,7 @@ export default function Chatbot() {
           className="p-4 border border-gray-700 rounded max-h-96 overflow-y-auto mb-4 bg-gray-800 text-sm text-gray-100 flex flex-col gap-4"
         >
           {history.map((entry, i) => (
-            <div key={i}>
+            <React.Fragment key={i}>
               <div className="flex justify-end">
                 <div className="max-w-[70%] bg-blue-600 text-white px-4 py-2 rounded-xl rounded-br-none shadow-md whitespace-pre-wrap">
                   {entry.user}
@@ -54,7 +54,7 @@ export default function Chatbot() {
                   {entry.ai}
                 </div>
               </div>
-            </div>
+            </React.Fragment>
           ))}
         </div>
       )}
