@@ -1,10 +1,14 @@
-require("dotenv").config();
-
+require("dotenv").config({ path: ".env.local" });
+// require("dotenv").config({
+//   path: require("path").resolve(__dirname, ".env.local"),
+// });
+const rateLimit = require("express-rate-limit");
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const fetch = require("node-fetch");
 const { OpenAI } = require("openai");
+const isInputFlagged = require("./checkInputSafety");
 
 const app = express();
 const PORT = 5000;
@@ -14,6 +18,12 @@ app.use(bodyParser.json());
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5,
+  message: "Too many requests, please try again later.",
 });
 
 const OMDB_API_KEY = process.env.OMDB_API_KEY;
@@ -27,22 +37,37 @@ const OMDB_API_KEY = process.env.OMDB_API_KEY;
 //   poster: `https://image.tmdb.org/t/p/w200${movie.poster_path}`
 // }));
 // res.json(recommendations);
-
+app.use("/api/recommendations", limiter);
 app.get("/api/recommendations", async (req, res) => {
   const title = req.query.title || "";
-  console.log("title: ", title);
+
   if (!title || typeof title !== "string") {
     return res.status(400).json({ error: "Missing or invalid movie title" });
   }
 
   try {
+    const moderationRes = await openai.moderations.create({
+      input: title,
+    });
+
+    const flagged = moderationRes.results[0].flagged;
+
+    const check = isInputFlagged(moderationRes);
+
+    if (check.flagged || flagged) {
+      console.log("Moderation Scores:", check.scores);
+      return res
+        .status(400)
+        .json({ error: `Inappropriate input detected. (${check.reason})` });
+    }
+
     const aiResponse = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       temperature: 0.7,
       messages: [
         {
           role: "system",
-          content: `You are a movie expert. When given a movie title, recommend 3 similar movies (just titles).`,
+          content: `You are a movie expert. When given a movie title, always recommend exactly 3 similar movies (only titles).`,
         },
         {
           role: "user",
@@ -73,6 +98,8 @@ app.get("/api/recommendations", async (req, res) => {
           plot: data.Plot,
           poster: data.Poster !== "N/A" ? data.Poster : null,
           year: data.Year,
+          genre: data?.Genre,
+          rating: data?.imdbRating,
         });
       }
     }
@@ -84,14 +111,38 @@ app.get("/api/recommendations", async (req, res) => {
   }
 });
 
+app.use("/api/chat", limiter);
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
+  const moderationRes = await openai.moderations.create({
+    input: message,
+  });
+  console.log("moderation: ", moderationRes);
+  const flagged = moderationRes.results[0].flagged;
+
+  const check = isInputFlagged(moderationRes);
+
+  if (check.flagged || flagged) {
+    console.log("Moderation Scores:", check.scores);
+    return res
+      .status(400)
+      .json({ error: `Inappropriate input detected. (${check.reason})` });
+  }
 
   const completion = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
-    messages: [{ role: "user", content: message }],
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a respectful, helpful assistant. If the user inputs something harmful, abusive, or inappropriate, respond with a polite refusal.",
+      },
+      { role: "user", content: message },
+    ],
   });
+
   console.log("openAI completion: ", completion);
+
   const reply = completion?.choices?.[0]?.message?.content;
   res.json({ reply });
 });
